@@ -16,7 +16,7 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background-color: var(--bg);
             color: var(--text);
             margin: 0;
@@ -25,35 +25,20 @@
         }
 
         .form-group { margin-bottom: 20px; }
-        label { display: block; font-size: 14px; color: var(--hint); margin-bottom: 8px; font-weight: 500; }
+        label { display: block; font-size: 12px; color: var(--hint); margin-bottom: 8px; font-weight: bold; text-transform: uppercase; }
 
         input, select {
             width: 100%;
             padding: 12px;
-            border: 1px solid #ccc;
+            border: 1px solid rgba(0,0,0,0.1);
             border-radius: 10px;
             box-sizing: border-box;
-            background: var(--bg);
+            background: var(--secondary-bg);
             color: var(--text);
             font-size: 16px;
         }
 
         .row { display: flex; gap: 12px; }
-
-        .split-container {
-            background: var(--secondary-bg);
-            padding: 15px;
-            border-radius: 12px;
-            margin-top: 10px;
-        }
-
-        .participant-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 0;
-            border-bottom: 1px solid rgba(0,0,0,0.05);
-        }
 
         #validation-bar {
             position: fixed;
@@ -61,15 +46,11 @@
             left: 0;
             right: 0;
             background: var(--bg);
-            padding: 15px 20px;
+            padding: 20px;
             border-top: 1px solid rgba(0,0,0,0.1);
             box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
         }
 
-        .status-msg { font-size: 14px; font-weight: bold; text-align: center; }
         .btn {
             width: 100%;
             padding: 16px;
@@ -81,22 +62,19 @@
             font-size: 16px;
             cursor: pointer;
         }
-        
-        .error { color: #ff4d4d; }
-        .success { color: #248b1d; }
     </style>
 </head>
 <body>
 
     <div class="form-group">
         <label>Description</label>
-        <input type="text" id="desc" placeholder="e.g. Lunch, Grab, Movie">
+        <input type="text" id="desc" placeholder="e.g. Sushi Dinner">
     </div>
 
     <div class="row">
         <div class="form-group" style="flex: 2;">
             <label>Amount</label>
-            <input type="number" id="amount" placeholder="0.00" step="0.01" oninput="validate()">
+            <input type="number" id="amount" placeholder="0.00" step="0.01">
         </div>
         <div class="form-group" style="flex: 1;">
             <label>Currency</label>
@@ -109,138 +87,9 @@
     </div>
 
     <div class="form-group">
-        <label>Paid By (Payer Name)</label>
-        <input type="text" id="payer" placeholder="Your name">
-    </div>
-
-    <div class="form-group">
-        <label>Split Logic</label>
-        <select id="logic" onchange="renderParticipants()">
-            <option value="EQUAL">Split Equally</option>
-            <option value="RATIO">By Ratio (%)</option>
-            <option value="EXACT">By Exact Amount</option>
-        </select>
-    </div>
-
-    <div class="form-group">
-        <label id="list-label">Participants</label>
-        <div id="participant-list" class="split-container"></div>
+        <label>Paid By</label>
+        <input type="text" id="payer" placeholder="Who paid?">
     </div>
 
     <div id="validation-bar">
-        <div id="status-text" class="status-msg"></div>
-        <button class="btn" onclick="sendToBot()">Prepare Expense Message</button>
-    </div>
-
-    <script>
-        const tg = window.Telegram.WebApp;
-        tg.ready();
-        tg.expand();
-
-        const urlParams = new URLSearchParams(window.location.search);
-        const membersParam = urlParams.get('members');
-        let friends = membersParam ? 
-            membersParam.split(',').map(n => decodeURIComponent(n.trim())) : 
-            ["Alex", "Sam", "Jordan"];
-
-        function renderParticipants() {
-            const logic = document.getElementById('logic').value;
-            const list = document.getElementById('participant-list');
-            list.innerHTML = '';
-
-            if (logic === "EQUAL") {
-                list.innerHTML = `<div class="participant-row" style="color:var(--hint)"><span>Everyone in the group</span><input type="checkbox" checked disabled></div>`;
-            } else {
-                const unit = (logic === "RATIO") ? "%" : "$";
-                friends.forEach(name => {
-                    const div = document.createElement('div');
-                    div.className = 'participant-row';
-                    div.innerHTML = `
-                        <div class="participant-info">
-                            <input type="checkbox" id="chk-${name}" onchange="toggleInput('${name}')">
-                            <label for="chk-${name}">${name}</label>
-                        </div>
-                        <div class="input-wrapper">
-                            <span>${unit}</span>
-                            <input type="number" id="input-${name}" style="width:60px" disabled oninput="validate()">
-                        </div>
-                    `;
-                    list.appendChild(div);
-                });
-            }
-            validate();
-        }
-
-        function toggleInput(name) {
-            const chk = document.getElementById(`chk-${name}`);
-            const inp = document.getElementById(`input-${name}`);
-            if(inp) {
-                inp.disabled = !chk.checked;
-                if (!chk.checked) inp.value = '';
-            }
-            validate();
-        }
-
-        function validate() {
-            const logic = document.getElementById('logic').value;
-            const totalBill = parseFloat(document.getElementById('amount').value) || 0;
-            const status = document.getElementById('status-text');
-            
-            if (logic === "EQUAL") {
-                status.innerHTML = `<span class="success">Ready: Split will be even.</span>`;
-                return true;
-            }
-
-            let currentSum = 0;
-            friends.forEach(name => {
-                const inp = document.getElementById(`input-${name}`);
-                if (inp && !inp.disabled) currentSum += parseFloat(inp.value) || 0;
-            });
-
-            const target = (logic === "RATIO") ? 100 : totalBill;
-            const unit = (logic === "RATIO") ? "%" : "$";
-            const isValid = Math.abs(currentSum - target) < 0.01;
-
-            status.innerHTML = isValid ? 
-                `<span class="success">Total matches: ${currentSum.toFixed(2)}${unit}</span>` : 
-                `<span class="error">Total: ${currentSum.toFixed(2)} / ${target.toFixed(2)}${unit}</span>`;
-            return isValid;
-        }
-
-        function sendToBot() {
-            const amount = document.getElementById('amount').value;
-            const currency = document.getElementById('currency').value;
-            const description = document.getElementById('desc').value;
-            const payer = document.getElementById('payer').value;
-            const logic = document.getElementById('logic').value;
-
-            if (!amount || !payer || !description) {
-                tg.showAlert("Please fill in Amount, Payer, and Description!");
-                return;
-            }
-
-            if (!validate() && logic !== "EQUAL") {
-                tg.showAlert("Total split doesn't match!");
-                return;
-            }
-
-            // Construct the command Clawdbot will process
-            const command = `/log ${amount} ${currency} ${description} by ${payer}`;
-
-            // switchInlineQuery closes the app and puts this text in the chat bar
-            // Second parameter ['groups'] ensures it suggests current/group chats
-            try {
-                tg.switchInlineQuery(command, ['groups', 'users']);
-                // Small delay before closing to ensure Telegram processes the query
-                setTimeout(() => { tg.close(); }, 200);
-            } catch (e) {
-                // Fallback for older versions or issues
-                tg.showAlert("Error opening chat. Copying text instead.");
-                navigator.clipboard.writeText(command);
-            }
-        }
-
-        renderParticipants();
-    </script>
-</body>
-</html>
+        <button class="btn" onclick="
