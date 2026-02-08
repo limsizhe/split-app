@@ -21,7 +21,7 @@
             color: var(--text);
             margin: 0;
             padding: 20px;
-            padding-bottom: 120px; /* Space for fixed status bar */
+            padding-bottom: 120px;
         }
 
         .form-group { margin-bottom: 20px; }
@@ -54,16 +54,6 @@
             padding: 12px 0;
             border-bottom: 1px solid rgba(0,0,0,0.05);
         }
-
-        .participant-row:last-child { border-bottom: none; }
-
-        .participant-info { display: flex; align-items: center; gap: 12px; }
-        
-        input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--button); }
-
-        .input-wrapper { display: flex; align-items: center; gap: 5px; width: 110px; }
-        .input-wrapper span { color: var(--hint); font-weight: bold; width: 15px; }
-        .val-input { width: 100%; text-align: right; padding: 8px; border-radius: 6px; border: 1px solid #ccc; }
 
         #validation-bar {
             position: fixed;
@@ -139,7 +129,7 @@
 
     <div id="validation-bar">
         <div id="status-text" class="status-msg"></div>
-        <button class="btn" onclick="sendToBot()">Add to Group Expense</button>
+        <button class="btn" onclick="sendToBot()">Prepare Expense Message</button>
     </div>
 
     <script>
@@ -147,16 +137,11 @@
         tg.ready();
         tg.expand();
 
-        // --- DYNAMIC MEMBER LOADING ---
         const urlParams = new URLSearchParams(window.location.search);
         const membersParam = urlParams.get('members');
-        
-        // Use members from URL or default to a placeholder
         let friends = membersParam ? 
             membersParam.split(',').map(n => decodeURIComponent(n.trim())) : 
             ["Alex", "Sam", "Jordan"];
-
-        const groupName = tg.initDataUnsafe?.chat?.title || "Expense Group";
 
         function renderParticipants() {
             const logic = document.getElementById('logic').value;
@@ -177,7 +162,7 @@
                         </div>
                         <div class="input-wrapper">
                             <span>${unit}</span>
-                            <input type="number" id="input-${name}" class="val-input" disabled placeholder="0" oninput="validate()">
+                            <input type="number" id="input-${name}" style="width:60px" disabled oninput="validate()">
                         </div>
                     `;
                     list.appendChild(div);
@@ -189,8 +174,10 @@
         function toggleInput(name) {
             const chk = document.getElementById(`chk-${name}`);
             const inp = document.getElementById(`input-${name}`);
-            inp.disabled = !chk.checked;
-            if (!chk.checked) inp.value = '';
+            if(inp) {
+                inp.disabled = !chk.checked;
+                if (!chk.checked) inp.value = '';
+            }
             validate();
         }
 
@@ -214,64 +201,46 @@
             const unit = (logic === "RATIO") ? "%" : "$";
             const isValid = Math.abs(currentSum - target) < 0.01;
 
-            if (isValid) {
-                status.innerHTML = `<span class="success">Total matches: ${currentSum.toFixed(2)}${unit}</span>`;
-            } else {
-                status.innerHTML = `<span class="error">Total: ${currentSum.toFixed(2)} / ${target.toFixed(2)}${unit}</span>`;
-            }
+            status.innerHTML = isValid ? 
+                `<span class="success">Total matches: ${currentSum.toFixed(2)}${unit}</span>` : 
+                `<span class="error">Total: ${currentSum.toFixed(2)} / ${target.toFixed(2)}${unit}</span>`;
             return isValid;
         }
 
         function sendToBot() {
-            const logic = document.getElementById('logic').value;
+            const amount = document.getElementById('amount').value;
+            const currency = document.getElementById('currency').value;
+            const description = document.getElementById('desc').value;
             const payer = document.getElementById('payer').value;
+            const logic = document.getElementById('logic').value;
 
-            if (!payer) {
-                tg.showAlert("Please enter the Payer's name!");
+            if (!amount || !payer || !description) {
+                tg.showAlert("Please fill in Amount, Payer, and Description!");
                 return;
             }
 
             if (!validate() && logic !== "EQUAL") {
-                tg.showAlert("Total split doesn't match the bill!");
+                tg.showAlert("Total split doesn't match!");
                 return;
             }
 
-            const participants = [];
-            const splitDetails = {};
+            // Construct the command Clawdbot will process
+            const command = `/log ${amount} ${currency} ${description} by ${payer}`;
 
-            if (logic === "EQUAL") {
-                participants.push("Everyone");
-            } else {
-                friends.forEach(name => {
-                    const chk = document.getElementById(`chk-${name}`);
-                    const val = document.getElementById(`input-${name}`).value;
-                    if (chk && chk.checked && val) {
-                        participants.push(name);
-                        splitDetails[name] = val;
-                    }
-                });
+            // switchInlineQuery closes the app and puts this text in the chat bar
+            // Second parameter ['groups'] ensures it suggests current/group chats
+            try {
+                tg.switchInlineQuery(command, ['groups', 'users']);
+                // Small delay before closing to ensure Telegram processes the query
+                setTimeout(() => { tg.close(); }, 200);
+            } catch (e) {
+                // Fallback for older versions or issues
+                tg.showAlert("Error opening chat. Copying text instead.");
+                navigator.clipboard.writeText(command);
             }
-
-            const payload = {
-                Date: new Date().toISOString().split('T')[0],
-                Group: groupName,
-                Payer: payer,
-                Amount: document.getElementById('amount').value,
-                Currency: document.getElementById('currency').value,
-                Description: document.getElementById('desc').value,
-                Participants: participants.join(', '),
-                Split_Logic: logic,
-                Split_Details: JSON.stringify(splitDetails)
-            };
-
-            // This 'types' the expense into the chat bar for the user
-            const text = `/log ${payload.Amount} ${payload.Currency} for ${payload.Description}`;
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(text)}`);
-            tg.close();
         }
 
         renderParticipants();
     </script>
 </body>
 </html>
-
