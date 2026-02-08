@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Splitwise Clone</title>
+    <title>Group Expense Splitter</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root {
@@ -21,13 +21,13 @@
             color: var(--text);
             margin: 0;
             padding: 20px;
-            padding-bottom: 100px;
+            padding-bottom: 120px; /* Space for fixed status bar */
         }
 
         .form-group { margin-bottom: 20px; }
         label { display: block; font-size: 14px; color: var(--hint); margin-bottom: 8px; font-weight: 500; }
 
-        input, select, textarea {
+        input, select {
             width: 100%;
             padding: 12px;
             border: 1px solid #ccc;
@@ -36,7 +36,6 @@
             background: var(--bg);
             color: var(--text);
             font-size: 16px;
-            outline: none;
         }
 
         .row { display: flex; gap: 12px; }
@@ -60,10 +59,10 @@
 
         .participant-info { display: flex; align-items: center; gap: 12px; }
         
-        input[type="checkbox"] { width: 20px; height: 20px; }
+        input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--button); }
 
-        .input-wrapper { display: flex; align-items: center; gap: 5px; width: 100px; }
-        .input-wrapper span { color: var(--hint); font-weight: bold; }
+        .input-wrapper { display: flex; align-items: center; gap: 5px; width: 110px; }
+        .input-wrapper span { color: var(--hint); font-weight: bold; width: 15px; }
         .val-input { width: 100%; text-align: right; padding: 8px; border-radius: 6px; border: 1px solid #ccc; }
 
         #validation-bar {
@@ -71,18 +70,19 @@
             bottom: 0;
             left: 0;
             right: 0;
-            background: var(--secondary-bg);
+            background: var(--bg);
             padding: 15px 20px;
-            border-top: 1px solid #ddd;
+            border-top: 1px solid rgba(0,0,0,0.1);
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
             display: flex;
             flex-direction: column;
-            gap: 5px;
+            gap: 10px;
         }
 
-        .status-msg { font-size: 13px; font-weight: bold; }
+        .status-msg { font-size: 14px; font-weight: bold; text-align: center; }
         .btn {
             width: 100%;
-            padding: 15px;
+            padding: 16px;
             background: var(--button);
             color: var(--button-text);
             border: none;
@@ -100,13 +100,13 @@
 
     <div class="form-group">
         <label>Description</label>
-        <input type="text" id="desc" placeholder="What was this for?">
+        <input type="text" id="desc" placeholder="e.g. Lunch, Grab, Movie">
     </div>
 
     <div class="row">
         <div class="form-group" style="flex: 2;">
             <label>Amount</label>
-            <input type="number" id="amount" placeholder="0.00" step="0.01">
+            <input type="number" id="amount" placeholder="0.00" step="0.01" oninput="validate()">
         </div>
         <div class="form-group" style="flex: 1;">
             <label>Currency</label>
@@ -114,14 +114,13 @@
                 <option value="USD">USD</option>
                 <option value="SGD">SGD</option>
                 <option value="MYR">MYR</option>
-                <option value="EUR">EUR</option>
             </select>
         </div>
     </div>
 
     <div class="form-group">
         <label>Paid By (Payer Name)</label>
-        <input type="text" id="payer" placeholder="Who paid the bill?">
+        <input type="text" id="payer" placeholder="Your name">
     </div>
 
     <div class="form-group">
@@ -134,22 +133,30 @@
     </div>
 
     <div class="form-group">
-        <label>Participants</label>
+        <label id="list-label">Participants</label>
         <div id="participant-list" class="split-container"></div>
     </div>
 
     <div id="validation-bar">
         <div id="status-text" class="status-msg"></div>
-        <button class="btn" onclick="sendToBot()">Log Expense</button>
+        <button class="btn" onclick="sendToBot()">Add to Group Expense</button>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
-        const friends = ["Alex", "Sam", "Jordan", "Taylor"]; // Edit your friend list here
-        const groupName = tg.initDataUnsafe?.chat?.title || "Personal";
-
         tg.ready();
         tg.expand();
+
+        // --- DYNAMIC MEMBER LOADING ---
+        const urlParams = new URLSearchParams(window.location.search);
+        const membersParam = urlParams.get('members');
+        
+        // Use members from URL or default to a placeholder
+        let friends = membersParam ? 
+            membersParam.split(',').map(n => decodeURIComponent(n.trim())) : 
+            ["Alex", "Sam", "Jordan"];
+
+        const groupName = tg.initDataUnsafe?.chat?.title || "Expense Group";
 
         function renderParticipants() {
             const logic = document.getElementById('logic').value;
@@ -193,33 +200,39 @@
             const status = document.getElementById('status-text');
             
             if (logic === "EQUAL") {
-                status.innerHTML = `<span class="success">Ready: Split will be calculated automatically.</span>`;
+                status.innerHTML = `<span class="success">Ready: Split will be even.</span>`;
                 return true;
             }
 
             let currentSum = 0;
             friends.forEach(name => {
                 const inp = document.getElementById(`input-${name}`);
-                if (!inp.disabled) currentSum += parseFloat(inp.value) || 0;
+                if (inp && !inp.disabled) currentSum += parseFloat(inp.value) || 0;
             });
 
             const target = (logic === "RATIO") ? 100 : totalBill;
             const unit = (logic === "RATIO") ? "%" : "$";
-            const diff = Math.abs(currentSum - target);
-            const isValid = diff < 0.01;
+            const isValid = Math.abs(currentSum - target) < 0.01;
 
             if (isValid) {
-                status.innerHTML = `<span class="success">Perfect! Total is ${currentSum}${unit}</span>`;
+                status.innerHTML = `<span class="success">Total matches: ${currentSum.toFixed(2)}${unit}</span>`;
             } else {
-                status.innerHTML = `<span class="error">Total: ${currentSum}/${target}${unit}</span>`;
+                status.innerHTML = `<span class="error">Total: ${currentSum.toFixed(2)} / ${target.toFixed(2)}${unit}</span>`;
             }
             return isValid;
         }
 
         function sendToBot() {
             const logic = document.getElementById('logic').value;
+            const payer = document.getElementById('payer').value;
+
+            if (!payer) {
+                tg.showAlert("Please enter the Payer's name!");
+                return;
+            }
+
             if (!validate() && logic !== "EQUAL") {
-                tg.showAlert("The split totals do not match! Please check the numbers.");
+                tg.showAlert("Total split doesn't match the bill!");
                 return;
             }
 
@@ -232,7 +245,7 @@
                 friends.forEach(name => {
                     const chk = document.getElementById(`chk-${name}`);
                     const val = document.getElementById(`input-${name}`).value;
-                    if (chk.checked && val) {
+                    if (chk && chk.checked && val) {
                         participants.push(name);
                         splitDetails[name] = val;
                     }
@@ -242,7 +255,7 @@
             const payload = {
                 Date: new Date().toISOString().split('T')[0],
                 Group: groupName,
-                Payer: document.getElementById('payer').value,
+                Payer: payer,
                 Amount: document.getElementById('amount').value,
                 Currency: document.getElementById('currency').value,
                 Description: document.getElementById('desc').value,
@@ -255,9 +268,7 @@
             tg.close();
         }
 
-        // Initial render
         renderParticipants();
-        document.getElementById('amount').addEventListener('input', validate);
     </script>
 </body>
 </html>
