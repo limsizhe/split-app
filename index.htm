@@ -264,7 +264,9 @@
                 Split_Details: JSON.stringify(splitDetails)
             };
 
-            tg.sendData(JSON.stringify(payload));
+            // This 'types' the expense into the chat bar for the user
+            const text = `/log ${payload.Amount} ${payload.Currency} for ${payload.Description}`;
+            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(text)}`);
             tg.close();
         }
 
@@ -272,3 +274,4 @@
     </script>
 </body>
 </html>
+
