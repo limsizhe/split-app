@@ -145,4 +145,119 @@
 
     <script>
         const tg = window.Telegram.WebApp;
-        const friends = ["Alex", "Sam", "Jordan",
+        const friends = ["Alex", "Sam", "Jordan", "Taylor"]; // Edit your friend list here
+        const groupName = tg.initDataUnsafe?.chat?.title || "Personal";
+
+        tg.ready();
+        tg.expand();
+
+        function renderParticipants() {
+            const logic = document.getElementById('logic').value;
+            const list = document.getElementById('participant-list');
+            list.innerHTML = '';
+
+            if (logic === "EQUAL") {
+                list.innerHTML = `<div class="participant-row" style="color:var(--hint)"><span>Everyone in the group</span><input type="checkbox" checked disabled></div>`;
+            } else {
+                const unit = (logic === "RATIO") ? "%" : "$";
+                friends.forEach(name => {
+                    const div = document.createElement('div');
+                    div.className = 'participant-row';
+                    div.innerHTML = `
+                        <div class="participant-info">
+                            <input type="checkbox" id="chk-${name}" onchange="toggleInput('${name}')">
+                            <label for="chk-${name}">${name}</label>
+                        </div>
+                        <div class="input-wrapper">
+                            <span>${unit}</span>
+                            <input type="number" id="input-${name}" class="val-input" disabled placeholder="0" oninput="validate()">
+                        </div>
+                    `;
+                    list.appendChild(div);
+                });
+            }
+            validate();
+        }
+
+        function toggleInput(name) {
+            const chk = document.getElementById(`chk-${name}`);
+            const inp = document.getElementById(`input-${name}`);
+            inp.disabled = !chk.checked;
+            if (!chk.checked) inp.value = '';
+            validate();
+        }
+
+        function validate() {
+            const logic = document.getElementById('logic').value;
+            const totalBill = parseFloat(document.getElementById('amount').value) || 0;
+            const status = document.getElementById('status-text');
+            
+            if (logic === "EQUAL") {
+                status.innerHTML = `<span class="success">Ready: Split will be calculated automatically.</span>`;
+                return true;
+            }
+
+            let currentSum = 0;
+            friends.forEach(name => {
+                const inp = document.getElementById(`input-${name}`);
+                if (!inp.disabled) currentSum += parseFloat(inp.value) || 0;
+            });
+
+            const target = (logic === "RATIO") ? 100 : totalBill;
+            const unit = (logic === "RATIO") ? "%" : "$";
+            const diff = Math.abs(currentSum - target);
+            const isValid = diff < 0.01;
+
+            if (isValid) {
+                status.innerHTML = `<span class="success">Perfect! Total is ${currentSum}${unit}</span>`;
+            } else {
+                status.innerHTML = `<span class="error">Total: ${currentSum}/${target}${unit}</span>`;
+            }
+            return isValid;
+        }
+
+        function sendToBot() {
+            const logic = document.getElementById('logic').value;
+            if (!validate() && logic !== "EQUAL") {
+                tg.showAlert("The split totals do not match! Please check the numbers.");
+                return;
+            }
+
+            const participants = [];
+            const splitDetails = {};
+
+            if (logic === "EQUAL") {
+                participants.push("Everyone");
+            } else {
+                friends.forEach(name => {
+                    const chk = document.getElementById(`chk-${name}`);
+                    const val = document.getElementById(`input-${name}`).value;
+                    if (chk.checked && val) {
+                        participants.push(name);
+                        splitDetails[name] = val;
+                    }
+                });
+            }
+
+            const payload = {
+                Date: new Date().toISOString().split('T')[0],
+                Group: groupName,
+                Payer: document.getElementById('payer').value,
+                Amount: document.getElementById('amount').value,
+                Currency: document.getElementById('currency').value,
+                Description: document.getElementById('desc').value,
+                Participants: participants.join(', '),
+                Split_Logic: logic,
+                Split_Details: JSON.stringify(splitDetails)
+            };
+
+            tg.sendData(JSON.stringify(payload));
+            tg.close();
+        }
+
+        // Initial render
+        renderParticipants();
+        document.getElementById('amount').addEventListener('input', validate);
+    </script>
+</body>
+</html>
