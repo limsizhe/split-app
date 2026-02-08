@@ -1,30 +1,112 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Splitwise Clone</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        :root { --tg-theme-bg: var(--tg-theme-bg-color, #ffffff); --tg-theme-text: var(--tg-theme-text-color, #222222); --tg-theme-hint: var(--tg-theme-hint-color, #999999); --tg-theme-button: var(--tg-theme-button-color, #248b1d); }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--tg-theme-bg); color: var(--tg-theme-text); padding: 15px; margin: 0; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; font-size: 14px; color: var(--tg-theme-hint); margin-bottom: 5px; }
-        input, select, textarea { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; background: var(--tg-theme-bg); color: var(--tg-theme-text); font-size: 16px; }
-        .row { display: flex; gap: 10px; }
-        .btn { width: 100%; padding: 15px; background: var(--tg-theme-button); color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; margin-top: 10px; cursor: pointer; }
-        .split-box { background: rgba(0,0,0,0.05); padding: 10px; border-radius: 8px; margin-top: 5px; }
+        :root {
+            --bg: var(--tg-theme-bg-color, #ffffff);
+            --text: var(--tg-theme-text-color, #222222);
+            --hint: var(--tg-theme-hint-color, #999999);
+            --button: var(--tg-theme-button-color, #248b1d);
+            --button-text: var(--tg-theme-button-text-color, #ffffff);
+            --secondary-bg: var(--tg-theme-secondary-bg-color, #f4f4f4);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            padding-bottom: 100px;
+        }
+
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-size: 14px; color: var(--hint); margin-bottom: 8px; font-weight: 500; }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            box-sizing: border-box;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 16px;
+            outline: none;
+        }
+
+        .row { display: flex; gap: 12px; }
+
+        .split-container {
+            background: var(--secondary-bg);
+            padding: 15px;
+            border-radius: 12px;
+            margin-top: 10px;
+        }
+
+        .participant-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+        }
+
+        .participant-row:last-child { border-bottom: none; }
+
+        .participant-info { display: flex; align-items: center; gap: 12px; }
+        
+        input[type="checkbox"] { width: 20px; height: 20px; }
+
+        .input-wrapper { display: flex; align-items: center; gap: 5px; width: 100px; }
+        .input-wrapper span { color: var(--hint); font-weight: bold; }
+        .val-input { width: 100%; text-align: right; padding: 8px; border-radius: 6px; border: 1px solid #ccc; }
+
+        #validation-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--secondary-bg);
+            padding: 15px 20px;
+            border-top: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .status-msg { font-size: 13px; font-weight: bold; }
+        .btn {
+            width: 100%;
+            padding: 15px;
+            background: var(--button);
+            color: var(--button-text);
+            border: none;
+            border-radius: 12px;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        
+        .error { color: #ff4d4d; }
+        .success { color: #248b1d; }
     </style>
 </head>
 <body>
+
     <div class="form-group">
         <label>Description</label>
-        <input type="text" id="desc" placeholder="e.g. Dinner, Taxi">
+        <input type="text" id="desc" placeholder="What was this for?">
     </div>
 
     <div class="row">
         <div class="form-group" style="flex: 2;">
             <label>Amount</label>
-            <input type="number" id="amount" placeholder="0.00">
+            <input type="number" id="amount" placeholder="0.00" step="0.01">
         </div>
         <div class="form-group" style="flex: 1;">
             <label>Currency</label>
@@ -38,13 +120,13 @@
     </div>
 
     <div class="form-group">
-        <label>Paid By (Payer)</label>
-        <input type="text" id="payer" placeholder="Your Name">
+        <label>Paid By (Payer Name)</label>
+        <input type="text" id="payer" placeholder="Who paid the bill?">
     </div>
 
     <div class="form-group">
         <label>Split Logic</label>
-        <select id="logic" onchange="toggleDetails()">
+        <select id="logic" onchange="renderParticipants()">
             <option value="EQUAL">Split Equally</option>
             <option value="RATIO">By Ratio (%)</option>
             <option value="EXACT">By Exact Amount</option>
@@ -52,54 +134,15 @@
     </div>
 
     <div class="form-group">
-        <label>Participants & Details</label>
-        <textarea id="details" rows="2" placeholder="Alex, Sam, Jordan"></textarea>
-        <small style="color: var(--tg-theme-hint); font-size: 11px;">
-            If Ratio/Exact: Alex:70, Sam:30
-        </small>
+        <label>Participants</label>
+        <div id="participant-list" class="split-container"></div>
     </div>
 
-    <button class="btn" onclick="sendToBot()">Add Expense</button>
+    <div id="validation-bar">
+        <div id="status-text" class="status-msg"></div>
+        <button class="btn" onclick="sendToBot()">Log Expense</button>
+    </div>
 
     <script>
         const tg = window.Telegram.WebApp;
-        tg.ready();
-        tg.expand();
-
-        // Auto-detect group name from Telegram metadata
-        const groupName = tg.initDataUnsafe?.chat?.title || "Private Chat";
-
-        function toggleDetails() {
-            const logic = document.getElementById('logic').value;
-            const detailField = document.getElementById('details');
-            if(logic === "EQUAL") {
-                detailField.placeholder = "Alex, Sam, Jordan";
-            } else {
-                detailField.placeholder = "Alex:70, Sam:30";
-            }
-        }
-
-        function sendToBot() {
-            const data = {
-                Date: new Date().toISOString().split('T')[0],
-                Group: groupName,
-                Payer: document.getElementById('payer').value,
-                Amount: document.getElementById('amount').value,
-                Currency: document.getElementById('currency').value,
-                Description: document.getElementById('desc').value,
-                Participants: document.getElementById('details').value.split(',').map(s => s.split(':')[0].trim()).join(', '),
-                Split_Logic: document.getElementById('logic').value,
-                Split_Details: document.getElementById('details').value.trim()
-            };
-
-            if(!data.Amount || !data.Payer) {
-                alert("Please enter Amount and Payer!");
-                return;
-            }
-
-            tg.sendData(JSON.stringify(data));
-            tg.close();
-        }
-    </script>
-</body>
-</html>
+        const friends = ["Alex", "Sam", "Jordan",
