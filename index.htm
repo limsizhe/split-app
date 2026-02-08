@@ -28,4 +28,78 @@
         </div>
         <div class="form-group" style="flex: 1;">
             <label>Currency</label>
-            <select id="currency
+            <select id="currency">
+                <option value="USD">USD</option>
+                <option value="SGD">SGD</option>
+                <option value="MYR">MYR</option>
+                <option value="EUR">EUR</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label>Paid By (Payer)</label>
+        <input type="text" id="payer" placeholder="Your Name">
+    </div>
+
+    <div class="form-group">
+        <label>Split Logic</label>
+        <select id="logic" onchange="toggleDetails()">
+            <option value="EQUAL">Split Equally</option>
+            <option value="RATIO">By Ratio (%)</option>
+            <option value="EXACT">By Exact Amount</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>Participants & Details</label>
+        <textarea id="details" rows="2" placeholder="Alex, Sam, Jordan"></textarea>
+        <small style="color: var(--tg-theme-hint); font-size: 11px;">
+            If Ratio/Exact: Alex:70, Sam:30
+        </small>
+    </div>
+
+    <button class="btn" onclick="sendToBot()">Add Expense</button>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        // Auto-detect group name from Telegram metadata
+        const groupName = tg.initDataUnsafe?.chat?.title || "Private Chat";
+
+        function toggleDetails() {
+            const logic = document.getElementById('logic').value;
+            const detailField = document.getElementById('details');
+            if(logic === "EQUAL") {
+                detailField.placeholder = "Alex, Sam, Jordan";
+            } else {
+                detailField.placeholder = "Alex:70, Sam:30";
+            }
+        }
+
+        function sendToBot() {
+            const data = {
+                Date: new Date().toISOString().split('T')[0],
+                Group: groupName,
+                Payer: document.getElementById('payer').value,
+                Amount: document.getElementById('amount').value,
+                Currency: document.getElementById('currency').value,
+                Description: document.getElementById('desc').value,
+                Participants: document.getElementById('details').value.split(',').map(s => s.split(':')[0].trim()).join(', '),
+                Split_Logic: document.getElementById('logic').value,
+                Split_Details: document.getElementById('details').value.trim()
+            };
+
+            if(!data.Amount || !data.Payer) {
+                alert("Please enter Amount and Payer!");
+                return;
+            }
+
+            tg.sendData(JSON.stringify(data));
+            tg.close();
+        }
+    </script>
+</body>
+</html>
